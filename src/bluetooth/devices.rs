@@ -1,48 +1,19 @@
 use anyhow::{anyhow, Result};
-use zbus::Connection;
+use std::process::Command;
 
-const ADAPTER_PATH: &str = "/org/bluez/hci0";
-const DEVICE_INTERFACE: &str = "org.bluez.Device1";
+fn run_bluetoothctl(args: &[&str]) -> Result<String> {
+    let output = Command::new("bluetoothctl")
+        .args(args)
+        .output()?;
 
-fn mac_to_path(address: &str) -> String {
-    format!(
-        "/org/bluez/hci0/dev_{}",
-        address.replace(':', "_").to_uppercase()
-    )
-}
+    if !output.status.success() {
+        return Err(anyhow!(
+            "bluetoothctl failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
 
-async fn call_device_method(address: &str, method: &str) -> Result<()> {
-    let path = mac_to_path(address);
-    let connection = Connection::system().await?;
-
-    connection
-        .call_method(
-            Some("org.bluez"),
-            &path,
-            Some(DEVICE_INTERFACE),
-            method,
-            &(),
-        )
-        .await?;
-
-    Ok(())
-}
-
-async fn get_device_property(address: &str, prop: &str) -> Result<String> {
-    let path = mac_to_path(address);
-    let connection = Connection::system().await?;
-
-    let result: String = connection
-        .call_method(
-            Some("org.freedesktop.DBus.Properties"),
-            &path,
-            Some("org.freedesktop.DBus.Properties"),
-            "Get",
-            &(DEVICE_INTERFACE, prop),
-        )
-        .await?;
-
-    Ok(result)
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 pub struct Device1Proxy {
@@ -51,23 +22,29 @@ pub struct Device1Proxy {
 }
 
 pub async fn get_device_proxy(address: &str) -> Result<Device1Proxy> {
-    match get_device_property(address, "Name").await {
-        Ok(name) => Ok(Device1Proxy {
-            address: address.to_string(),
-            name,
-        }),
-        Err(e) => {
-            tracing::warn!("Device {} not found: {}", address, e);
+    match run_bluetoothctl(&["info", address]) {
+        Ok(output) => {
+            let name = output
+                .lines()
+                .find(|l| l.contains("Name:"))
+                .and_then(|l| l.split_whitespace().last())
+                .unwrap_or(&address)
+                .to_string();
+
             Ok(Device1Proxy {
                 address: address.to_string(),
-                name: format!("Device-{}", address),
+                name,
             })
         }
+        Err(_) => Ok(Device1Proxy {
+            address: address.to_string(),
+            name: format!("Device-{}", address),
+        }),
     }
 }
 
 pub async fn connect_device(address: &str) -> Result<()> {
-    match call_device_method(address, "Connect").await {
+    match run_bluetoothctl(&["connect", address]) {
         Ok(_) => {
             tracing::info!("Connecting to device: {}", address);
             Ok(())
@@ -80,7 +57,7 @@ pub async fn connect_device(address: &str) -> Result<()> {
 }
 
 pub async fn disconnect_device(address: &str) -> Result<()> {
-    match call_device_method(address, "Disconnect").await {
+    match run_bluetoothctl(&["disconnect", address]) {
         Ok(_) => {
             tracing::info!("Disconnecting from device: {}", address);
             Ok(())
@@ -93,7 +70,7 @@ pub async fn disconnect_device(address: &str) -> Result<()> {
 }
 
 pub async fn pair_device(address: &str) -> Result<()> {
-    match call_device_method(address, "Pair").await {
+    match run_bluetoothctl(&["pair", address]) {
         Ok(_) => {
             tracing::info!("Pairing with device: {}", address);
             Ok(())
@@ -106,24 +83,35 @@ pub async fn pair_device(address: &str) -> Result<()> {
 }
 
 pub async fn set_trusted(address: &str, trusted: bool) -> Result<()> {
-    let path = mac_to_path(address);
-    let connection = Connection::system().await?;
-
-    connection
-        .call_method(
-            Some("org.freedesktop.DBus.Properties"),
-            &path,
-            Some("org.freedesktop.DBus.Properties"),
-            "Set",
-            &(DEVICE_INTERFACE, "Trusted", trusted),
-        )
-        .await?;
-
-    tracing::info!("Set trusted={} for device: {}", trusted, address);
-    Ok(())
+    let cmd = if trusted { "trust" } else { "untrust" };
+    match run_bluetoothctl(&[cmd, address]) {
+        Ok(_) => {
+            tracing::info!("Set trusted={} for device: {}", trusted, address);
+            Ok(())
+        }
+        Err(e) => {
+            tracing::error!("Failed to set trusted: {}", e);
+            Err(e)
+        }
+    }
 }
 
 pub async fn get_device_info(address: &str) -> Result<(String, bool, bool, bool)> {
-    let device = get_device_proxy(address).await?;
-    Ok((device.name, false, false, false))
+    match run_bluetoothctl(&["info", address]) {
+        Ok(output) => {
+            let name = output
+                .lines()
+                .find(|l| l.contains("Name:"))
+                .and_then(|l| l.split_whitespace().last())
+                .unwrap_or(&address)
+                .to_string();
+
+            let connected = output.contains("Connected: yes");
+            let paired = output.contains("Paired: yes");
+            let trusted = output.contains("Trusted: yes");
+
+            Ok((name, connected, paired, trusted))
+        }
+        Err(_) => Ok((address.to_string(), false, false, false)),
+    }
 }

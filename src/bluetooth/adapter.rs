@@ -1,56 +1,37 @@
 use anyhow::{anyhow, Result};
-use zbus::Connection;
+use std::process::Command;
 
-const ADAPTER_PATH: &str = "/org/bluez/hci0";
-const ADAPTER_INTERFACE: &str = "org.bluez.Adapter1";
+fn run_bluetoothctl(args: &[&str]) -> Result<String> {
+    let output = Command::new("bluetoothctl")
+        .args(args)
+        .output()?;
 
-async fn call_adapter_method(method: &str) -> Result<()> {
-    let connection = Connection::system().await?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "bluetoothctl failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
 
-    connection
-        .call_method(
-            Some("org.bluez"),
-            ADAPTER_PATH,
-            Some(ADAPTER_INTERFACE),
-            method,
-            &(),
-        )
-        .await?;
-
-    Ok(())
-}
-
-async fn get_adapter_property(prop: &str) -> Result<bool> {
-    let connection = Connection::system().await?;
-
-    let result: bool = connection
-        .call_method(
-            Some("org.freedesktop.DBus.Properties"),
-            ADAPTER_PATH,
-            Some("org.freedesktop.DBus.Properties"),
-            "Get",
-            &(ADAPTER_INTERFACE, prop),
-        )
-        .await?;
-
-    Ok(result)
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 pub async fn is_powered() -> Result<bool> {
-    match get_adapter_property("Powered").await {
-        Ok(powered) => {
+    match run_bluetoothctl(&["show"]) {
+        Ok(output) => {
+            let powered = output.contains("Powered: yes");
             tracing::debug!("Adapter powered: {}", powered);
             Ok(powered)
         }
         Err(e) => {
-            tracing::warn!("Failed to get Powered property: {}", e);
+            tracing::warn!("Failed to get Powered state: {}", e);
             Err(anyhow!("BlueZ Adapter not found"))
         }
     }
 }
 
 pub async fn start_discovery() -> Result<()> {
-    match call_adapter_method("StartDiscovery").await {
+    match run_bluetoothctl(&["scan", "on"]) {
         Ok(_) => {
             tracing::info!("Discovery started");
             Ok(())
@@ -63,7 +44,7 @@ pub async fn start_discovery() -> Result<()> {
 }
 
 pub async fn stop_discovery() -> Result<()> {
-    match call_adapter_method("StopDiscovery").await {
+    match run_bluetoothctl(&["scan", "off"]) {
         Ok(_) => {
             tracing::info!("Discovery stopped");
             Ok(())
@@ -81,18 +62,15 @@ pub async fn toggle_power() -> Result<()> {
 }
 
 pub async fn set_powered(powered: bool) -> Result<()> {
-    let connection = Connection::system().await?;
-
-    connection
-        .call_method(
-            Some("org.freedesktop.DBus.Properties"),
-            ADAPTER_PATH,
-            Some("org.freedesktop.DBus.Properties"),
-            "Set",
-            &(ADAPTER_INTERFACE, "Powered", powered),
-        )
-        .await?;
-
-    tracing::info!("Adapter power set to: {}", powered);
-    Ok(())
+    let arg = if powered { "on" } else { "off" };
+    match run_bluetoothctl(&["power", arg]) {
+        Ok(_) => {
+            tracing::info!("Adapter power set to: {}", powered);
+            Ok(())
+        }
+        Err(e) => {
+            tracing::error!("Failed to set power: {}", e);
+            Err(e)
+        }
+    }
 }
