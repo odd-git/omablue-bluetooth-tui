@@ -29,6 +29,8 @@ pub enum ConfirmAction {
     Trust { address: String, name: String },
 }
 
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 #[derive(Debug)]
 pub struct AppState {
     pub mode: AppMode,
@@ -41,6 +43,9 @@ pub struct AppState {
     pub error_msg: Option<String>,
     pub quit: bool,
     pub confirm_action: Option<ConfirmAction>,
+    pub spinner_frame: usize,
+    pub operation_in_progress: bool,
+    pub last_action: Option<String>,
 }
 
 impl AppState {
@@ -58,6 +63,9 @@ impl AppState {
             error_msg: None,
             quit: false,
             confirm_action: None,
+            spinner_frame: 0,
+            operation_in_progress: false,
+            last_action: None,
         })
     }
 
@@ -86,8 +94,10 @@ impl AppState {
             KeyCode::Enter => {
                 if let Some(device) = self.devices.get(self.selected) {
                     if device.connected {
+                        self.start_operation("Disconnecting");
                         Some(BluetoothAction::Disconnect(device.address.clone()))
                     } else {
+                        self.start_operation("Connecting");
                         Some(BluetoothAction::Connect(device.address.clone()))
                     }
                 } else {
@@ -96,6 +106,7 @@ impl AppState {
             }
             KeyCode::Char('d') => {
                 if let Some(device) = self.devices.get(self.selected) {
+                    self.start_operation("Disconnecting");
                     Some(BluetoothAction::Disconnect(device.address.clone()))
                 } else {
                     None
@@ -103,8 +114,10 @@ impl AppState {
             }
             KeyCode::Char('s') => {
                 if self.scanning {
+                    self.start_operation("Stopping scan");
                     Some(BluetoothAction::StopScan)
                 } else {
+                    self.start_operation("Scanning for devices");
                     Some(BluetoothAction::StartScan)
                 }
             }
@@ -112,16 +125,21 @@ impl AppState {
                 if key.modifiers.contains(KeyModifiers::SHIFT) {
                     // Shift+T = set trusted
                     if let Some(device) = self.devices.get(self.selected) {
+                        self.start_operation("Setting trusted");
                         Some(BluetoothAction::SetTrusted(device.address.clone()))
                     } else {
                         None
                     }
                 } else {
                     // t = toggle adapter power
+                    self.start_operation("Toggling Bluetooth");
                     Some(BluetoothAction::TogglePower)
                 }
             }
-            KeyCode::Char('p') => Some(BluetoothAction::Pair),
+            KeyCode::Char('p') => {
+                self.start_operation("Pairing");
+                Some(BluetoothAction::Pair)
+            }
             KeyCode::Char('?') => {
                 // Show help (would open overlay)
                 None
@@ -187,6 +205,32 @@ impl AppState {
 
     pub fn should_quit(&self) -> bool {
         self.quit
+    }
+
+    pub fn animate_spinner(&mut self) {
+        if self.operation_in_progress {
+            self.spinner_frame = (self.spinner_frame + 1) % SPINNER_FRAMES.len();
+        }
+    }
+
+    pub fn get_spinner(&self) -> &'static str {
+        if self.operation_in_progress {
+            SPINNER_FRAMES[self.spinner_frame]
+        } else {
+            ""
+        }
+    }
+
+    pub fn start_operation(&mut self, action: &str) {
+        self.operation_in_progress = true;
+        self.spinner_frame = 0;
+        self.last_action = Some(action.to_string());
+        self.status_msg = Some(format!("Running: {}...", action));
+    }
+
+    pub fn end_operation(&mut self, result: &str) {
+        self.operation_in_progress = false;
+        self.status_msg = Some(result.to_string());
     }
 }
 

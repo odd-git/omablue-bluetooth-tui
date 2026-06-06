@@ -66,7 +66,7 @@ async fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()
                 app.set_theme(colors);
             }
             Some(events::AppEvent::Tick) => {
-                // Update animations, timers
+                app.animate_spinner();
             }
             Some(events::AppEvent::Quit) | None => break,
         }

@@ -124,11 +124,28 @@ fn render_status_bar(f: &mut Frame, app: &AppState, area: Rect) {
         " | Scan: Inactive"
     };
 
-    let bar = format!("{}{}", adapter_status, scan_status);
+    let spinner = app.get_spinner();
+    let operation_status = if app.operation_in_progress {
+        format!(" {} {}", spinner, app.last_action.as_ref().unwrap_or(&"Processing".to_string()))
+    } else {
+        String::new()
+    };
+
+    let bar = if let Some(msg) = &app.status_msg {
+        format!("{}{}{} | {}", adapter_status, scan_status, operation_status, msg)
+    } else {
+        format!("{}{}{}", adapter_status, scan_status, operation_status)
+    };
+
+    let color = if app.error_msg.is_some() {
+        app.theme.error_color()
+    } else {
+        app.theme.fg_color()
+    };
 
     let paragraph = Paragraph::new(bar).style(
         Style::default()
-            .fg(app.theme.fg_color())
+            .fg(color)
             .bg(app.theme.bg_color()),
     );
 
