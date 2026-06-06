@@ -1,7 +1,7 @@
 [package]
 name = "omablue-bluetooth-tui"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["odd-git <oddai@tuta.io>"]
 description = "Modern TUI Bluetooth manager for OddOs/secureblue, with theme integration"
 license = "MIT"
