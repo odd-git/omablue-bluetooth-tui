@@ -3,7 +3,7 @@ use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
 
 pub fn render_main_layout(f: &mut Frame, app: &AppState) {
-    let size = f.size();
+    let size = f.area();
 
     // Main layout: 3 rows (top, middle, bottom)
     let chunks = Layout::default()
@@ -112,12 +112,6 @@ fn render_device_details(f: &mut Frame, app: &AppState, area: Rect) {
 }
 
 fn render_status_bar(f: &mut Frame, app: &AppState, area: Rect) {
-    let status = if let Some(msg) = &app.status_msg {
-        msg.clone()
-    } else {
-        String::new()
-    };
-
     let adapter_status = if app.adapter_powered {
         "Adapter: ON"
     } else {
@@ -130,7 +124,7 @@ fn render_status_bar(f: &mut Frame, app: &AppState, area: Rect) {
         " | Scan: Inactive"
     };
 
-    let bar = format!("{}{}{}", adapter_status, scan_status, "");
+    let bar = format!("{}{}", adapter_status, scan_status);
 
     let paragraph = Paragraph::new(bar).style(
         Style::default()

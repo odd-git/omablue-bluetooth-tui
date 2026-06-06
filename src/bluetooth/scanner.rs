@@ -6,45 +6,20 @@ use zbus::fdo::ObjectManagerProxy;
 
 pub async fn scan_devices(tx: mpsc::Sender<AppEvent>) -> Result<()> {
     let connection = zbus::Connection::system().await?;
-    let object_manager = ObjectManagerProxy::new(&connection).await?;
 
-    // Send initial adapter state
-    if let Ok(powered) = super::adapter::is_powered().await {
-        let _ = tx
-            .send(AppEvent::BluetoothEvent(BluetoothEvent::AdapterPowered(
-                powered,
-            )))
-            .await;
-    }
-
-    // Listen for new interfaces (devices)
-    let mut interfaces_added = object_manager.receive_interfaces_added().await?;
-
-    while let Some(signal) = interfaces_added.next().await {
-        if let Ok(args) = signal.args() {
-            let path = args.object_path();
-            let interfaces = args.interfaces_added();
-
-            // Check if this is a Device1 interface
-            if let Some(_device_iface) = interfaces.get("org.bluez.Device1") {
-                if let Ok(device) = super::devices::get_device_proxy(
-                    &extract_mac_from_path(path.as_str()),
-                ) {
-                    if let Ok(name) = device.name().await {
-                        let address = extract_mac_from_path(path.as_str());
-                        let _ = tx
-                            .send(AppEvent::BluetoothEvent(BluetoothEvent::DeviceDiscovered {
-                                address,
-                                name,
-                            }))
-                            .await;
-                    }
-                }
-            }
+    // For now, just keep adapter updated
+    // Full ObjectManager integration requires proper DBus path handling
+    loop {
+        if let Ok(powered) = super::adapter::is_powered().await {
+            let _ = tx
+                .send(AppEvent::BluetoothEvent(BluetoothEvent::AdapterPowered(
+                    powered,
+                )))
+                .await;
         }
-    }
 
-    Ok(())
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
 }
 
 fn extract_mac_from_path(path: &str) -> String {
