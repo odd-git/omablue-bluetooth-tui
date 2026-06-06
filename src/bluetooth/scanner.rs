@@ -1,8 +1,6 @@
 use crate::events::{AppEvent, BluetoothEvent};
 use anyhow::Result;
-use futures_util::StreamExt;
 use tokio::sync::mpsc;
-use zbus::fdo::ObjectManagerProxy;
 
 pub async fn scan_devices(tx: mpsc::Sender<AppEvent>) -> Result<()> {
     let connection = zbus::Connection::system().await?;

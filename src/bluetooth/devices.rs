@@ -34,9 +34,9 @@ trait Device1 {
 
 pub async fn get_device_proxy(address: &str) -> Result<Device1Proxy<'static>> {
     let connection = zbus::Connection::system().await?;
-    let path = format!("/org/bluez/hci0/dev_{}", address.replace(':', '_'));
+    let path = format!("/org/bluez/hci0/dev_{}", address.replace(":", "_"));
     let proxy = Device1Proxy::builder(&connection)
-        .path(&path)?
+        .path(path.as_str())?
         .build()
         .await?;
     Ok(proxy)
