@@ -1,0 +1,69 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Check binary size
+        run: ls -lh target/release/omablue-bluetooth-tui
+
+      - name: Verify dependencies
+        run: |
+          ldd target/release/omablue-bluetooth-tui | grep -E "libdbus|libbluetooth" && exit 1 || exit 0
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omablue-bluetooth-tui-${{ runner.os }}
+          path: target/release/omablue-bluetooth-tui
+          retention-days: 30
+
+  release-artifacts:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: omablue-bluetooth-tui-Linux
+          path: ./artifacts
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/omablue-bluetooth-tui
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

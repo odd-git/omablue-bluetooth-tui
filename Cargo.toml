@@ -1,0 +1,32 @@
+[package]
+name = "omablue-bluetooth-tui"
+version = "0.1.0"
+edition = "2024"
+authors = ["odd-git <oddai@tuta.io>"]
+description = "Modern TUI Bluetooth manager for OddOs/secureblue, with theme integration"
+license = "MIT"
+repository = "https://github.com/odd-git/omablue-bluetooth-tui"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+tokio = { version = "1.40", features = ["full"] }
+zbus = { version = "4.4", features = ["tokio"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+notify = "7.0"
+notify-rust = "4.11"
+anyhow = "1.0"
+dirs = "5.0"
+futures-util = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
