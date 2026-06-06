@@ -92,22 +92,24 @@ impl AppState {
                 None
             }
             KeyCode::Enter => {
-                if let Some(device) = self.devices.get(self.selected) {
+                let device = self.devices.get(self.selected).cloned();
+                if let Some(device) = device {
                     if device.connected {
                         self.start_operation("Disconnecting");
-                        Some(BluetoothAction::Disconnect(device.address.clone()))
+                        Some(BluetoothAction::Disconnect(device.address))
                     } else {
                         self.start_operation("Connecting");
-                        Some(BluetoothAction::Connect(device.address.clone()))
+                        Some(BluetoothAction::Connect(device.address))
                     }
                 } else {
                     None
                 }
             }
             KeyCode::Char('d') => {
-                if let Some(device) = self.devices.get(self.selected) {
+                let device = self.devices.get(self.selected).cloned();
+                if let Some(device) = device {
                     self.start_operation("Disconnecting");
-                    Some(BluetoothAction::Disconnect(device.address.clone()))
+                    Some(BluetoothAction::Disconnect(device.address))
                 } else {
                     None
                 }
@@ -124,9 +126,10 @@ impl AppState {
             KeyCode::Char('t') => {
                 if key.modifiers.contains(KeyModifiers::SHIFT) {
                     // Shift+T = set trusted
-                    if let Some(device) = self.devices.get(self.selected) {
+                    let device = self.devices.get(self.selected).cloned();
+                    if let Some(device) = device {
                         self.start_operation("Setting trusted");
-                        Some(BluetoothAction::SetTrusted(device.address.clone()))
+                        Some(BluetoothAction::SetTrusted(device.address))
                     } else {
                         None
                     }
